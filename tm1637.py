@@ -1,48 +1,53 @@
-# MicroPython TM1637 quad 7-segment LED display driver
+# CircuitPython TM1637 quad 7-segment LED display driver
+# Ported from MicroPython version.
 
-from micropython import const
-from machine import Pin
-from time import sleep_us, sleep_ms
+import digitalio
+import time
 
-TM1637_CMD1 = const(64)  # 0x40 data command
-TM1637_CMD2 = const(192) # 0xC0 address command
-TM1637_CMD3 = const(128) # 0x80 display control command
-TM1637_DSP_ON = const(8) # 0x08 display on
-TM1637_DELAY = const(10) # 10us delay between clk/dio pulses
-TM1637_MSB = const(128)  # msb is the decimal point or the colon depending on your display
+
+TM1637_CMD1 = 64  # 0x40 data command
+TM1637_CMD2 = 192 # 0xC0 address command
+TM1637_CMD3 = 128 # 0x80 display control command
+TM1637_DSP_ON = 8 # 0x08 display on
+TM1637_DELAY = 10 # 10us delay between clk/dio pulses
+TM1637_MSB = 128  # msb is the decimal point or the colon depending on your display
 
 # 0-9, a-z, blank, dash, star
 _SEGMENTS = bytearray(b'\x3F\x06\x5B\x4F\x66\x6D\x7D\x07\x7F\x6F\x77\x7C\x39\x5E\x79\x71\x3D\x76\x06\x1E\x76\x38\x55\x54\x3F\x73\x67\x50\x6D\x78\x3E\x1C\x2A\x76\x6E\x5B\x00\x40\x63')
 
-class TM1637(object):
-    """Library for quad 7-segment LED modules based on the TM1637 LED driver."""
-    def __init__(self, clk, dio, brightness=7):
-        self.clk = clk
-        self.dio = dio
 
+class TM1637(object):
+    """Library for quad 7-segment LED modules based on the TM1637 LED driver.
+    
+    For the CircuitPython port, pass in board pins for `clk` and `dio`, such as `board.D1`
+    """
+    def __init__(self, clk, dio, brightness=7):
         if not 0 <= brightness <= 7:
             raise ValueError("Brightness out of range")
         self._brightness = brightness
 
-        self.clk.init(Pin.OUT, value=0)
-        self.dio.init(Pin.OUT, value=0)
+        self.clk = digitalio.DigitalInOut(clk)
+        self.dio = digitalio.DigitalInOut(dio)
+        self.clk.direction = digitalio.Direction.OUTPUT
+        self.dio.direction = digitalio.Direction.OUTPUT
+
         sleep_us(TM1637_DELAY)
 
         self._write_data_cmd()
         self._write_dsp_ctrl()
 
     def _start(self):
-        self.dio(0)
+        self.dio.value = False
         sleep_us(TM1637_DELAY)
-        self.clk(0)
+        self.clk.value = False
         sleep_us(TM1637_DELAY)
 
     def _stop(self):
-        self.dio(0)
+        self.dio.value = False
         sleep_us(TM1637_DELAY)
-        self.clk(1)
+        self.clk.value = True
         sleep_us(TM1637_DELAY)
-        self.dio(1)
+        self.dio.value = True
 
     def _write_data_cmd(self):
         # automatic address increment, normal mode
@@ -58,17 +63,17 @@ class TM1637(object):
 
     def _write_byte(self, b):
         for i in range(8):
-            self.dio((b >> i) & 1)
+            self.dio.value = bool((b >> i) & 1)
             sleep_us(TM1637_DELAY)
-            self.clk(1)
+            self.clk.value = True
             sleep_us(TM1637_DELAY)
-            self.clk(0)
+            self.clk.value = False
             sleep_us(TM1637_DELAY)
-        self.clk(0)
+        self.clk.value = False
         sleep_us(TM1637_DELAY)
-        self.clk(1)
+        self.clk.value = True
         sleep_us(TM1637_DELAY)
-        self.clk(0)
+        self.clk.value = False
         sleep_us(TM1637_DELAY)
 
     def brightness(self, val=None):
@@ -198,3 +203,12 @@ class TM1637Decimal(TM1637):
             segments[j] = self.encode_char(string[i])
             j += 1
         return segments
+
+
+# CircuitPython doesn't support the MicroPython sleep_us/ms so use our own
+def sleep_us(us):
+    time.sleep(us / 1000000)
+
+
+def sleep_ms(ms):
+    time.sleep(ms / 1000)
